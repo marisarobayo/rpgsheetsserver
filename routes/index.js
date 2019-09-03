@@ -17,7 +17,7 @@ router.post('/register', async function(req, res, next) {
 
   users = nano.db.use('users');
 
-  //checking if username is taken
+  // Checking if username is taken
   view = await users.view('users', 'by_username', {
     'key': username
   })
@@ -62,7 +62,7 @@ router.post('/register', async function(req, res, next) {
   user.isVerified = false;
 
   if (characterSheet){
-     //TODO hacer que se asigne la ficha que sea asociada a la character sheet
+     //TODO make the character sheet associated with the newly registered player
   }
 
   // Create activation token and save to DB
@@ -76,24 +76,54 @@ router.post('/register', async function(req, res, next) {
   }
   newPlayer = players.insert(player);
 
-  await sendVerificationEmail(email, user.verificationToken);
+  await sendVerificationEmail(email, user.verificationToken, newUser.id);
 
   res.status(200).send("Player created.")
 });
 
-router.post('/verify/:verificationToken', async function (req, res, next){
+router.post('/verify/:verificationToken/:userID', async function (req, res, next){
   verificationToken = req.params.verificationToken;
+  userID = req.params.userID;
+  
+  users = nano.db.use('users');
+
+  //Checks
+  user = await users.get(userID).catch((err) => {
+    res.status(400).send("User does not exist");
+    return;
+  });
+
+  if(user.isVerified){
+    res.status(400).send("User is already verified");
+    return;
+  }
+
+  if(user.verificationToken != verificationToken){
+    res.status(400).send("Verification token incorrect");
+    return;
+  }
+
+  if(Date.now() > user.verificationTokenExpireDate){
+    res.status(400).send("The verification token has expired. You need to create a new account");
+    await users.destroy(userID, user._rev).catch((err) => {
+      console.log(err);
+    })
+    return;
+  }
+
+  //TODO Actual verification
+
 
 
 });
 
-async function sendVerificationEmail (to, token){
+async function sendVerificationEmail (to, token, userID){
   const msg = {
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Activate your RPGSheets Account',
     text: 'this is the link: http://localhost:3000/verify?' + token,
-    html: 'this is the link: <a href=\"http://localhost:3000/verify?' + token + '\"> here </a>'
+    html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)
 }
@@ -104,15 +134,13 @@ async function createDB(){
   await nano.db.create('players');
   users = nano.db.use('users');
 
-  //design document that can search by username and email
+  // Design document that can search by username and email
   await users.insert({
     "views": {
       "by_username":
       { "map": function(doc) { emit(doc.username, doc._id)}},
       "by_email":
-      { "map": function(doc) { emit(doc.email, doc._id)}},
-      "by_verification_token":
-      { "map": function(doc) { emit(doc.verificationToken, doc._id)}},
+      { "map": function(doc) { emit(doc.email, doc._id)}}
     }
   },
   '_design/users'); //the _design makes nano understand this is a design document (it assumes they all have the _design/)
@@ -134,7 +162,7 @@ async function initialize(){
 }
 
 //If data is not initialized, do it now
-
+initialize();
 
 module.exports = router;
 
