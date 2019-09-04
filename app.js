@@ -4,9 +4,9 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var http = require('http');
 var https = require('https');
-
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+var passport = require('passport'), LocalStrategy = require('passport-local').Strategy;
+const nano = require('nano')('http://admin:admin@localhost:5984');
+var crypto = require('crypto');
 
 var app = express();
 
@@ -31,29 +31,94 @@ app.use((req,res,next) => {
   next();
 })
 
+// Login strategy with Passport
+passport.use(new LocalStrategy(
+  function(username, password, done) {
+    users = nano.db.use('users');
+    users.view('users', 'by_username', {
+      'key': username
+    }, function(err, user){
+      if(err){
+        return done(err);
+      }
+      if (!user) {
+        return done(null, false, { message: 'Incorrect username.' });
+      }
+      users.get(user.rows[0].id, function(err, user){
+        if(err){
+          return done(err);
+        }
+        if (!validPassword(user, password)) {
+          return done(null, false, { message: 'Incorrect password.' });
+        }
+        return done(null, user); //TODO debe haber un error aquí porque falla al autenticar, quizás es porque user no es un username sino un objeto?
+      })
+      return done(err);
+    })
+  }
+));
+
+function validPassword(user, password){
+  return user.passwordHash == sha512(password, user.passwordSalt)
+}
+
+function sha512(password, salt){
+  var hash = crypto.createHmac('sha512', salt);
+  hash.update(password);
+  var value = hash.digest('hex');
+  return value;
+
+}
+
+app.use(passport.initialize());
+
+// Initializes the database
+async function createDB(){
+  await nano.db.create('users');
+  await nano.db.create('players');
+  users = nano.db.use('users');
+
+  // Design document that can search by username and email
+  await users.insert({
+    "views": {
+      "by_username":
+      { "map": function(doc) { emit(doc.username, doc._id)}},
+      "by_email":
+      { "map": function(doc) { emit(doc.email, doc._id)}}
+    }
+  },
+  '_design/users'); //the _design makes nano understand this is a design document (it assumes they all have the _design/)
+}
+
+async function initializeDB(){
+
+  /*if(body.includes('users')){
+    await nano.db.destroy('users');
+    await nano.db.destroy('players');
+  }*/
+
+  let body = await nano.db.list();
+  if(!body.includes('users')){
+    createDB();
+  }
+}
+
+initializeDB();
+
+/*module.exports = function(){
+  return {
+    app: app,
+    sha512: sha512
+  }
+}*/
+
+exports.app = app;
+exports.sha512 = sha512;
+
+var indexRouter = require('./routes/index');
+var usersRouter = require('./routes/users');
+
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
-
-
-
-/*
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
-});
-
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
-*/
-
-module.exports = app;
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))

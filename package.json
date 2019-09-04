@@ -13,6 +13,8 @@
     "express": "^4.16.4",
     "http-errors": "^1.6.3",
     "morgan": "^1.9.1",
-    "nano": "^8.1.0"
+    "nano": "^8.1.0",
+    "passport": "^0.4.0",
+    "passport-local": "^1.0.0"
   }
 }

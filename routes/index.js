@@ -1,9 +1,15 @@
 var express = require('express');
 var router = express.Router();
-const nano = require('nano')('http://admin:admin@localhost:5984');
 const sgMail = require('@sendgrid/mail');
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 var cryptoRandomString = require('crypto-random-string');
+var passport = require('passport');
+const nano = require('nano')('http://admin:admin@localhost:5984');
+
+var js = require('../app.js');
+
+var app = js.app;
+var sha512 = js.sha512;
 
 // New player registration
 router.post('/register', async function(req, res, next) {
@@ -22,7 +28,6 @@ router.post('/register', async function(req, res, next) {
     'key': username
   })
 
-  console.log(view);
   if (view.rows.length > 0) {
     res.status(400).send('Username is already taken.');
     return;
@@ -58,7 +63,9 @@ router.post('/register', async function(req, res, next) {
 
   user.displayName = displayName;
 
-  user.password = password;
+  user.passwordSalt = cryptoRandomString({length: 16});
+  user.passwordHash = sha512(password, user.passwordSalt);
+
   user.isVerified = false;
 
   if (characterSheet){
@@ -111,10 +118,16 @@ router.post('/verify/:verificationToken/:userID', async function (req, res, next
     return;
   }
 
-  //TODO Actual verification
+  // Actual verification
+  user.isVerified = true;
+  user.verificationToken = "";
+  users.insert(user);
+  res.status(200).send("User verified")
 
+});
 
-
+router.post('/login', passport.authenticate('local'), function (req,res){
+  res.status(200).send("Login successful");
 });
 
 async function sendVerificationEmail (to, token, userID){
@@ -127,42 +140,6 @@ async function sendVerificationEmail (to, token, userID){
   }
   await sgMail.send(msg)
 }
-
-// Initializes the database
-async function createDB(){
-  await nano.db.create('users');
-  await nano.db.create('players');
-  users = nano.db.use('users');
-
-  // Design document that can search by username and email
-  await users.insert({
-    "views": {
-      "by_username":
-      { "map": function(doc) { emit(doc.username, doc._id)}},
-      "by_email":
-      { "map": function(doc) { emit(doc.email, doc._id)}}
-    }
-  },
-  '_design/users'); //the _design makes nano understand this is a design document (it assumes they all have the _design/)
-}
-
-async function initialize(){
-
-  /*if(body.includes('users')){
-    await nano.db.destroy('users');
-    await nano.db.destroy('players');
-  }*/
-
-  let body = await nano.db.list();
-  if(!body.includes('users')){
-    createDB();
-  }
-
-  
-}
-
-//If data is not initialized, do it now
-initialize();
 
 module.exports = router;
 
