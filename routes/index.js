@@ -5,11 +5,14 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 var cryptoRandomString = require('crypto-random-string');
 var passport = require('passport');
 const nano = require('nano')('http://admin:admin@localhost:5984');
+const jwt = require('jsonwebtoken');
 
+var authModule = require('../utils/auth.js');
 var js = require('../app.js');
 
 var app = js.app;
-var sha512 = js.sha512;
+var sha512 = authModule.sha512;
+var jwtSecret = authModule.jwtSecret;
 
 // New player registration
 router.post('/register', async function(req, res, next) {
@@ -36,7 +39,6 @@ router.post('/register', async function(req, res, next) {
   user.username = username;
 
   // Checking if email is valid
-
   emailPattern = /^[a-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
   if(!emailPattern.test(email)){
     res.status(400).send('Invalid email.');
@@ -88,13 +90,14 @@ router.post('/register', async function(req, res, next) {
   res.status(200).send("Player created.")
 });
 
+// Verify a player registration
 router.post('/verify/:verificationToken/:userID', async function (req, res, next){
   verificationToken = req.params.verificationToken;
   userID = req.params.userID;
   
   users = nano.db.use('users');
 
-  //Checks
+  // Checks
   user = await users.get(userID).catch((err) => {
     res.status(400).send("User does not exist");
     return;
@@ -126,9 +129,23 @@ router.post('/verify/:verificationToken/:userID', async function (req, res, next
 
 });
 
-router.post('/login', passport.authenticate('local'), function (req,res){
-  res.status(200).send("Login successful");
+// Actual login, requires username and password in body
+router.post('/login', function (req, res, next) {
+  passport.authenticate('local', { session: false }, function (err, user) {
+    if(err || !user) {
+      return res.status(400).send("Error authenticating");
+    }
+    const token = jwt.sign(user, jwtSecret, {expiresIn: '24h'});
+    return res.json({token});
+  })(req,res,next);
 });
+
+// Check if user is log in, mostly debug purposes
+router.get('/login', passport.authenticate('jwt', {session: false}), function (req, res, next) {
+  res.send(req.user.username);
+});
+
+
 
 async function sendVerificationEmail (to, token, userID){
   const msg = {
