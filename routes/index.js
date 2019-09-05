@@ -65,6 +65,13 @@ router.post('/register', async function(req, res, next) {
 
   user.displayName = displayName;
 
+  // Check if password is long enough
+
+  if(password.length < 8){
+    res.status(400).send('Password not long enough.');
+    return;
+  }
+
   user.passwordSalt = cryptoRandomString({length: 16});
   user.passwordHash = sha512(password, user.passwordSalt);
 
@@ -85,7 +92,9 @@ router.post('/register', async function(req, res, next) {
   }
   newPlayer = players.insert(player);
 
-  await sendVerificationEmail(email, user.verificationToken, newUser.id);
+  await sendVerificationEmail(email, user.verificationToken, newUser.id).catch((err) => {
+    res.status(500).send("There was an error in sending you the email.");
+  });
 
   res.status(200).send("Player created.")
 });
@@ -145,7 +154,78 @@ router.get('/login', passport.authenticate('jwt', {session: false}), function (r
   res.send(req.user.username);
 });
 
+router.post('/resetPassword', async function(req,res,next){
+  users = nano.db.use('users');
 
+  // Checking if username is taken
+  view = await users.view('users', 'by_username', {
+    'key': req.body.username
+  });
+
+  // Checks
+  if (view.rows.length == 0) {
+    res.status(400).send('Username does not exist');
+    return;
+  }
+
+  user = await users.get(view.rows[0].id);
+  email = user.email;
+  if(!user.isVerified){
+    res.status(400).send("User not verified");
+    return;
+  }
+
+  token = cryptoRandomString({length:16});
+  user.passwordResetToken = token;
+  users.insert(user);
+
+  await sendResetPasswordEmail(email, token, user._id).catch((err) => {
+    res.status(500).send("There was an error in sending you the email.");
+    console.log(err);
+    return;
+  });
+
+  res.status(200).send("Reset email sent.")
+
+})
+
+router.post('/resetPassword/:passwordResetToken', async function(req,res,next){
+  username = req.body.username;
+  newPassword = req.body.password;
+  passwordResetToken = req.params.passwordResetToken;
+
+  users = nano.db.use('users');
+
+  // Checking if username is taken
+  view = await users.view('users', 'by_username', {
+    'key': req.body.username
+  });
+
+  // Checks
+  if (view.rows.length == 0) {
+    res.status(400).send('Username does not exist');
+    return;
+  }
+
+  user = await users.get(view.rows[0].id);
+
+  if(user.passwordResetToken != passwordResetToken ||passwordResetToken == ""){
+    res.status(400).send('Token is not correct or there is not one');
+  }
+
+  if(newPassword.length < 8){
+    res.status(400).send('Password not long enough.');
+    return;
+  }
+
+
+  user.passwordSalt = cryptoRandomString({length: 16});
+  user.passwordHash = sha512(newPassword, user.passwordSalt);
+  user.passwordResetToken = "";
+  users.insert(user);
+
+  res.status(200).send("Password changed");
+})
 
 async function sendVerificationEmail (to, token, userID){
   const msg = {
@@ -153,6 +233,17 @@ async function sendVerificationEmail (to, token, userID){
     from: 'rpgSheets@gmail.com',
     subject: 'Activate your RPGSheets Account',
     text: 'this is the link: http://localhost:3000/verify?' + token,
+    html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
+  }
+  await sgMail.send(msg)
+}
+
+async function sendResetPasswordEmail (to, token, userID){
+  const msg = {
+    to: email,
+    from: 'rpgSheets@gmail.com',
+    subject: 'Reset your RPGSheets Password',
+    text: 'this is the link: http://localhost:3000/resetPassword?' + token,
     html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)

@@ -6,7 +6,7 @@ const JWTStrategy   = passportJWT.Strategy;
 const ExtractJWT = passportJWT.ExtractJwt;
 const nano = require('nano')('http://admin:admin@localhost:5984');
 
-const jwtSecret = "thisisasecret"; //TODO CHANGE
+const jwtSecret = process.env.RPGSHEETS_JWT_SECRET;
 
 // Login strategy with Passport
 passport.use(new LocalStrategy(
