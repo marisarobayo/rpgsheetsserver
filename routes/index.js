@@ -4,15 +4,20 @@ const sgMail = require('@sendgrid/mail');
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 var cryptoRandomString = require('crypto-random-string');
 var passport = require('passport');
-const nano = require('nano')('http://admin:admin@localhost:5984');
+//const nano = require('nano')('http://admin:admin@localhost:5984');
 const jwt = require('jsonwebtoken');
 
 var authModule = require('../utils/auth.js');
 var js = require('../app.js');
+var users = require('../models/user.js');
 
 var app = js.app;
 var sha512 = authModule.sha512;
 var jwtSecret = authModule.jwtSecret;
+var User = users.User;
+var Player = users.Player;
+var GM = users.GM;
+var mongoose = js.mongoose;
 
 // New player registration
 router.post('/register', async function(req, res, next) {
@@ -24,18 +29,13 @@ router.post('/register', async function(req, res, next) {
 
   let user = {};
 
-  users = nano.db.use('users');
+  user2 = await User.findOne({username: username});
 
-  // Checking if username is taken
-  view = await users.view('users', 'by_username', {
-    'key': username
-  })
-
-  if (view.rows.length > 0) {
+  if (user2){
     res.status(400).send('Username is already taken.');
     return;
   }
-
+  
   user.username = username;
 
   // Checking if email is valid
@@ -44,13 +44,10 @@ router.post('/register', async function(req, res, next) {
     res.status(400).send('Invalid email.');
     return;
   }
+  user2 = await User.findOne({username: username});
 
-  // Checking if email is taken
-  view = await users.view('users', 'by_email', {
-    'key': email
-  })
-  if (view.rows.length > 0) {
-    res.status(400).send('Email is already taken.');
+  if(user2){
+    res.status(400).send('Username is already taken.');
     return;
   }
 
@@ -85,14 +82,13 @@ router.post('/register', async function(req, res, next) {
   user.verificationToken = cryptoRandomString({length: 16});
   user.verificationTokenExpireDate = new Date(new Date().getTime() + 86400000) // Set expire date to the next day
 
-  newUser = await users.insert(user);
-  players = nano.db.use('players');
-  player = {
-    userID : newUser.id
-  }
-  newPlayer = players.insert(player);
+  user = new User(user);
+  await user.save();
 
-  await sendVerificationEmail(email, user.verificationToken, newUser.id).catch((err) => {
+  player = new Player({user: user._id});
+  await player.save();
+
+  await sendVerificationEmail(email, user.verificationToken, user._id).catch((err) => {
     res.status(500).send("There was an error in sending you the email.");
   });
 
@@ -104,13 +100,13 @@ router.post('/verify/:verificationToken/:userID', async function (req, res, next
   verificationToken = req.params.verificationToken;
   userID = req.params.userID;
   
-  users = nano.db.use('users');
+  user = await User.findById(userID);
 
   // Checks
-  user = await users.get(userID).catch((err) => {
+  if (!user) {
     res.status(400).send("User does not exist");
     return;
-  });
+  };
 
   if(user.isVerified){
     res.status(400).send("User is already verified");
@@ -133,7 +129,7 @@ router.post('/verify/:verificationToken/:userID', async function (req, res, next
   // Actual verification
   user.isVerified = true;
   user.verificationToken = "";
-  users.insert(user);
+  user.save()
   res.status(200).send("User verified")
 
 });
@@ -141,10 +137,16 @@ router.post('/verify/:verificationToken/:userID', async function (req, res, next
 // Actual login, requires username and password in body
 router.post('/login', function (req, res, next) {
   passport.authenticate('local', { session: false }, function (err, user) {
-    if(err || !user) {
+    if(err || !user || !user.isVerified) {
       return res.status(400).send("Error authenticating");
     }
-    const token = jwt.sign(user, jwtSecret, {expiresIn: '24h'});
+
+    // Getting login token ready with less properties
+    let payload = {};
+    payload.username = user.username;
+    payload._id = user._id;
+
+    const token = jwt.sign(payload, jwtSecret, {expiresIn: '24h'});
     return res.json({token});
   })(req,res,next);
 });
@@ -155,20 +157,15 @@ router.get('/login', passport.authenticate('jwt', {session: false}), function (r
 });
 
 router.post('/resetPassword', async function(req,res,next){
-  users = nano.db.use('users');
-
-  // Checking if username is taken
-  view = await users.view('users', 'by_username', {
-    'key': req.body.username
-  });
-
   // Checks
-  if (view.rows.length == 0) {
+
+  let user = await User.findOne({username: req.body.username});
+
+  if (!user) {
     res.status(400).send('Username does not exist');
     return;
   }
 
-  user = await users.get(view.rows[0].id);
   email = user.email;
   if(!user.isVerified){
     res.status(400).send("User not verified");
@@ -177,7 +174,8 @@ router.post('/resetPassword', async function(req,res,next){
 
   token = cryptoRandomString({length:16});
   user.passwordResetToken = token;
-  users.insert(user);
+  user.passwordResetTokenExpireDate = new Date(new Date().getTime() + 86400000); // Set expire date to the next day 
+  user.save();
 
   await sendResetPasswordEmail(email, token, user._id).catch((err) => {
     res.status(500).send("There was an error in sending you the email.");
@@ -194,20 +192,13 @@ router.post('/resetPassword/:passwordResetToken', async function(req,res,next){
   newPassword = req.body.password;
   passwordResetToken = req.params.passwordResetToken;
 
-  users = nano.db.use('users');
-
-  // Checking if username is taken
-  view = await users.view('users', 'by_username', {
-    'key': req.body.username
-  });
-
   // Checks
-  if (view.rows.length == 0) {
+  user = await User.findOne({username: username});
+
+  if (!user) {
     res.status(400).send('Username does not exist');
     return;
   }
-
-  user = await users.get(view.rows[0].id);
 
   if(user.passwordResetToken != passwordResetToken ||passwordResetToken == ""){
     res.status(400).send('Token is not correct or there is not one');
@@ -218,11 +209,14 @@ router.post('/resetPassword/:passwordResetToken', async function(req,res,next){
     return;
   }
 
+  if(new Date() > user.passwordResetTokenExpireDate){
+    res.status(400).send('Token already expired');
+  }
 
   user.passwordSalt = cryptoRandomString({length: 16});
   user.passwordHash = sha512(newPassword, user.passwordSalt);
   user.passwordResetToken = "";
-  users.insert(user);
+  user.save()
 
   res.status(200).send("Password changed");
 })

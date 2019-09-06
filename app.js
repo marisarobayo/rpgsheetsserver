@@ -8,7 +8,9 @@ var https = require('https');
 var auth = require('./utils/auth.js')
 var passport = require('passport');
 
-const nano = require('nano')('http://admin:admin@localhost:5984');
+var mongoose = require('mongoose');
+mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
+
 const errorHandler = require('errorhandler');
 
 var app = express();
@@ -33,40 +35,8 @@ if(!isProduction) {
   app.use(errorHandler());
 }
 
-// Initializes our CouchDB database
-async function createDB(){
-  await nano.db.create('users');
-  await nano.db.create('players');
-  users = nano.db.use('users');
-
-  // Design document that can search by username and email
-  await users.insert({
-    "views": {
-      "by_username":
-      { "map": function(doc) { emit(doc.username, doc._id)}},
-      "by_email":
-      { "map": function(doc) { emit(doc.email, doc._id)}}
-    }
-  },
-  '_design/users'); //the _design makes nano understand this is a design document (it assumes they all have the _design/)
-}
-
-async function initializeDB(){
-
-  /*if(body.includes('users')){
-    await nano.db.destroy('users');
-    await nano.db.destroy('players');
-  }*/
-
-  let body = await nano.db.list();
-  if(!body.includes('users')){
-    createDB();
-  }
-}
-
-initializeDB();
-
 exports.app = app;
+exports.mongoose = mongoose;
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
