@@ -1,4 +1,4 @@
-var CharacterSheet = require('characterSheet.js');
+var CharacterSheet = require('characterSheet.js').CharacterSheet;
 
 var dwAbilitySchema = new Schema({
     name: String,
@@ -30,7 +30,8 @@ var dungeonWorldSchema = new Schema({
     raceMove: String,
     alignment: String,
     moves: [dwAbilitySchema],
-    equipment: [dwEquipmentSchema]
+    equipment: [dwEquipmentSchema],
+    bonds: [String]
 })
 
 var DWCharacterSheet = mongoose.model('DWCharacterSheet', dungeonWorldSchema);

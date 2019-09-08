@@ -3,7 +3,8 @@ var Schema = mongoose.Schema;
 
 var characterSheetSchema = new Schema({
     name: String,
-    displayImage: String
+    displayImage: String,
+    belongsTo: [{type: Schema.Types.ObjectId, ref: Player}]
 });
 
 var CharacterSheet = mongoose.model('CharacterSheet', characterSheetSchema);

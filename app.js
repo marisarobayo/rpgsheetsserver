@@ -7,6 +7,7 @@ var http = require('http');
 var https = require('https');
 var auth = require('./utils/auth.js')
 var passport = require('passport');
+const expressFileUpload = require('express-fileupload');
 
 var mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
@@ -29,7 +30,7 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 app.use(passport.initialize());
-
+app.use(expressFileUpload());
 
 if(!isProduction) {
   app.use(errorHandler());
