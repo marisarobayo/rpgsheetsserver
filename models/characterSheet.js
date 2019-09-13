@@ -1,5 +1,6 @@
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
+var Player = require('./user.js').Player;
 
 var characterSheetSchema = new Schema({
     name: String,

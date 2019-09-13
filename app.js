@@ -18,6 +18,11 @@ var app = express();
 
 var port = process.env.PORT || 3000;
 const isProduction = false;
+var corsOptions = {
+  origin: '*',
+  optionsSuccessStatus:200
+};
+
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -28,21 +33,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(cors());
+//app.use(cors(corsOptions));
 app.use(passport.initialize());
 app.use(expressFileUpload());
 
 if(!isProduction) {
   app.use(errorHandler());
+  app.use(cors());
 }
 
 exports.app = app;
 exports.mongoose = mongoose;
 
 var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+var sheetsRouter = require('./routes/sheets');
 
 app.use('/', indexRouter);
-app.use('/users', usersRouter);
+app.use('/', sheetsRouter);
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))

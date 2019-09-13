@@ -5,13 +5,11 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 var cryptoRandomString = require('crypto-random-string');
 var passport = require('passport');
 const jwt = require('jsonwebtoken');
-const fs = require('fs');
 
 var authModule = require('../utils/auth.js');
 var js = require('../app.js');
 var users = require('../models/user.js');
-var CharacterSheet = require('../models/characterSheet.js').CharacterSheet;
-var DWCharacterSheet = require('../models/dungeonWorldCS.js').DWCharacterSheet;
+var sheets = require('./sheets');
 
 var app = js.app;
 var sha512 = authModule.sha512;
@@ -20,7 +18,7 @@ var User = users.User;
 var Player = users.Player;
 var GM = users.GM;
 var mongoose = js.mongoose;
-
+var characterSheet = sheets.CharacterSheet;
 
 // New player registration
 router.post('/register', async function(req, res, next) {
@@ -32,28 +30,26 @@ router.post('/register', async function(req, res, next) {
 
   let user = {};
 
+  console.log(req.body);
+  console.log(req.body.username);
   user2 = await User.findOne({username: username});
 
   if (user2){
     res.status(400).send('Username is already taken.');
     return;
   }
-  
+  console.log(req.body.email);
   user.username = username;
 
   // Checking if email is valid
   emailPattern = /^[a-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+\/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
   if(!emailPattern.test(email)){
+    console.log("email incorrecto");
     res.status(400).send('Invalid email.');
     return;
   }
-  user2 = await User.findOne({username: username});
 
-  if(user2){
-    res.status(400).send('Username is already taken.');
-    return;
-  }
-
+  console.log("2");
   user.email = email;
 
   // Checking if the display name is correct
@@ -66,20 +62,28 @@ router.post('/register', async function(req, res, next) {
   user.displayName = displayName;
 
   // Check if password is long enough
-
   if(password.length < 8){
     res.status(400).send('Password not long enough.');
     return;
+  }
+
+  // If there's a character sheet, check if it's okay, but we can't assign it yet
+  let characterSheetObject;
+  if(characterSheet && characterSheet != ""){
+    characterSheetObject = await CharacterSheet.findById(characterSheet).catch((err) => {
+      res.status(400).send("Character sheet incorrect");
+      return;
+    })
+    if(!characterSheetObject){
+      res.status(400).send("Character sheet incorrect");
+      return;
+    }
   }
 
   user.passwordSalt = cryptoRandomString({length: 16});
   user.passwordHash = sha512(password, user.passwordSalt);
 
   user.isVerified = false;
-
-  if (characterSheet){
-     //TODO make the character sheet associated with the newly registered player
-  }
 
   // Create activation token and save to DB
   user.verificationToken = cryptoRandomString({length: 16});
@@ -91,11 +95,15 @@ router.post('/register', async function(req, res, next) {
   player = new Player({user: user._id});
   await player.save();
 
+  if (characterSheetObject){
+    sheets.assignPlayerToSheet(player, characterSheetObject);
+  }
+
   await sendVerificationEmail(email, user.verificationToken, user._id).catch((err) => {
     res.status(500).send("There was an error in sending you the email.");
   });
 
-  res.status(200).send("Player created.")
+  res.status(201).send("Player created.")
 });
 
 // Verify a player registration
@@ -133,13 +141,13 @@ router.post('/verify/:verificationToken/:userID', async function (req, res, next
   user.isVerified = true;
   user.verificationToken = "";
   user.save()
-  res.status(200).send("User verified")
+  res.status(201).send("User verified")
 
 });
 
 // Actual login, requires username and password in body
 router.post('/login', function (req, res, next) {
-  passport.authenticate('local', { session: false }, function (err, user) {
+  passport.authenticate('local', { session: false }, async function (err, user) {
     if(err || !user || !user.isVerified) {
       return res.status(400).send("Error authenticating");
     }
@@ -150,7 +158,13 @@ router.post('/login', function (req, res, next) {
     payload._id = user._id;
 
     const token = jwt.sign(payload, jwtSecret, {expiresIn: '24h'});
-    return res.json({token});
+
+    let isPlayer = false;
+    player = await Player.findById(user._id);
+    if(player){
+      isPlayer = true;
+    }
+    return res.json({token, isPlayer});
   })(req,res,next);
 });
 
@@ -161,7 +175,6 @@ router.get('/login', passport.authenticate('jwt', {session: false}), function (r
 
 router.post('/resetPassword', async function(req,res,next){
   // Checks
-
   let user = await User.findOne({username: req.body.username});
 
   if (!user) {
@@ -221,122 +234,20 @@ router.post('/resetPassword/:passwordResetToken', async function(req,res,next){
   user.passwordResetToken = "";
   user.save()
 
-  res.status(200).send("Password changed");
+  res.status(201).send("Password changed");
 })
 
-router.post('/sheets', passport.authenticate('jwt', {session: false}), function (req, res, next) {
-  name = req.body.name;
-  players = req.body.players;
-  image = req.files.image;
 
-  if(!name){
-    res.status(400).send('Name cannot be empty');
-    return;
-  }
+router.get('/username/:username', async function(req,res,next) {
+  username = req.params.username;
 
-  characterSheet = new CharacterSheet();
-  characterSheet.name = name;
-  characterSheet.players = [];
+  user = await User.findOne({username: username});
 
-  playersCorrect = true;
-  for(player in players){
-    await Player.findById(player).catch((err) => {
-      playersCorrect = false;
-    })
-  }
-
-  if(!playersCorrect){
-    res.status(400).send("Players not correct");
-    return;
-  }
-
-  if(image){
-    if(image.mimetype != "image/jpeg" && image.mimetype != "image/png" && image.mimetype != "image/gif"){
-      res.status(400).send("Image format not correct");
-    }
-  }
-
-  await characterSheet.save();
-  
-  if(image){
-    // Base image folder
-    if(!fs.exists('../public/characterSheetImages')){
-      try {
-        fs.mkdirSync('../public/characterSheetImages')
-      } catch(err) {
-        res.status(500).send("There was an error uploading your image");
-        return;
-      };
-    }
-
-    // Folder for this character sheet
-    if(!fs.exists('../public/characterSheetImages/' + characterSheet._id.toString())){
-      try {
-        fs.mkdirSync('../public/characterSheetImages' + characterSheet._id.toString())
-      } catch(err) {
-        res.status(500).send("There was an error uploading your image");
-        return;
-      };
-    }
-
-    await image.mv('../public/characterSheetImages' + characterSheet._id.toString()+"/" + "portrait").catch((err) => {
-      res.status(500).send("There was an error uploading your image");
-      return ;
-    })
-
-    res.status(200).send("Character sheet created");
-  }
-  
-
-})
-
-router.get('/sheets', passport.authenticate('jwt', {session: false}), function (req, res, next) {
-
-  token = jwt.decode(res.header('token'));
-  userid = token._id;
-
-  user = await findById(userid);
-
-  isAPlayer = true;
-  
-  player = await Player.findOne({user: userid}).catch((err) => {
-    isAPlayer = false;
-  });
-
-  if(isAPlayer){
-    sheets = await CharacterSheet.find({belongsTo: {$in: [player._id]}});
-
-    res.status(200).send(sheets);
+  if(user){
+    res.status(200).send(true);
   } else {
-    sheets = await CharacterSheet.find();
-    res.status(200).send(sheets);
+    res.status(200).send(false);
   }
-})
-
-router.get('/sheets/:id', passport.authenticate('jwt', {session: false}), function (req, res, next) {
-
-  token = jwt.decode(res.header('token'));
-  userid = token._id;
-  characterSheetID = req.params.id;
-
-  user = await findById(userid);
-
-  isAPlayer = true;
-  
-  player = await Player.findOne({user: userid}).catch((err) => {
-    isAPlayer = false;
-  });
-
-  //If its a player check if they have permission to watch this
-  if(isAPlayer){
-    if(!character.belongsTo.contains(player._id)){
-      res.status(400).send("You do not have permission to see this");
-    }
-  };
-
-  sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
-    res.status(400).send("The character sheet requested does not exist");
-  });
 })
 
 async function sendVerificationEmail (to, token, userID){

@@ -1,4 +1,6 @@
-var CharacterSheet = require('characterSheet.js').CharacterSheet;
+var mongoose = require('mongoose');
+var Schema = mongoose.Schema;
+var CharacterSheet = require('./characterSheet.js').CharacterSheet;
 
 var dwAbilitySchema = new Schema({
     name: String,
