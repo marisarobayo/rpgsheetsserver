@@ -3,6 +3,7 @@ var router = express.Router();
 var passport = require('passport');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
+const path = require('path')
 
 var js = require('../app.js');
 var users = require('../models/user.js');
@@ -17,8 +18,9 @@ var mongoose = js.mongoose;
 
 router.post('/sheets', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
   name = req.body.name;
-  players = req.body.players;
+  players = req.body.players; //TODO deprecated
   image = req.files.image;
+  game = req.body.game;
 
   if(!name){
     res.status(400).send('Name cannot be empty');
@@ -27,74 +29,90 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
 
   characterSheet = new CharacterSheet();
   characterSheet.name = name;
-  characterSheet.players = [];
+  characterSheet.belongsTo = [];
 
+  
+  // Add players that can see and edit the sheet
   playersCorrect = true;
   for(player in players){
     await Player.findById(player).catch((err) => {
       playersCorrect = false;
     })
+    characterSheet.belongsTo.push(player._id);
   }
-
   if(!playersCorrect){
     res.status(400).send("Players not correct");
     return;
   }
 
+  // If not a GM, add themselves to the character sheet
+  player = await getPlayer(req.user);
+  console.log(player);
+  if(player){
+    characterSheet.belongsTo.push(player._id);
+  }
+  
+  // Checking the image format first
   if(image){
     if(image.mimetype != "image/jpeg" && image.mimetype != "image/png" && image.mimetype != "image/gif"){
       res.status(400).send("Image format not correct");
+      return;
     }
   }
 
   await characterSheet.save();
   
+  // We have to add the picture afterwards since we need the id
   if(image){
     // Base image folder
-    if(!fs.exists('../public/characterSheetImages')){
-      try {
-        fs.mkdirSync('../public/characterSheetImages')
-      } catch(err) {
-        res.status(500).send("There was an error uploading your image");
-        return;
-      };
-    }
+    try {
+      fs.mkdirSync('./public/characterSheetImages');
+    } catch(err) {
+      //res.status(500).send("There was an error uploading your image");
+      //If it already exists thats fine
+      //return;
+    };
 
     // Folder for this character sheet
-    if(!fs.exists('../public/characterSheetImages/' + characterSheet._id.toString())){
-      try {
-        fs.mkdirSync('../public/characterSheetImages' + characterSheet._id.toString())
-      } catch(err) {
-        res.status(500).send("There was an error uploading your image");
-        return;
-      };
-    }
-
-    await image.mv('../public/characterSheetImages' + characterSheet._id.toString()+"/" + "portrait").catch((err) => {
+    try {
+      fs.mkdirSync('./public/characterSheetImages' + "/" + characterSheet._id.toString())
+    } catch(err) {
+      //res.status(500).send("There was an error uploading your image");
+      //If it already exists thats fine
+      //return;
+    };
+    let route = './public/characterSheetImages' + "/" + characterSheet._id.toString()+ "/" + image.name;
+    await image.mv(route).catch((err) => {
+      console.log("could not");
       res.status(500).send("There was an error uploading your image");
-      return ;
+      return;
     })
 
-    res.status(201).send("Character sheet created");
+    // Setting up the link
+    let link = "http://localhost:3000/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
+    characterSheet.displayImage = link;
+    characterSheet.save();
   }
-  
 
+  //TODO bad design, must refactor
+  if(game == "dw"){
+    cs = new DWCharacterSheet();
+    cs.characterSheet = characterSheet._id;
+  }
+
+  cs.save();
+
+  res.status(201).send("Character sheet created");
 })
 
 router.get('/sheets', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
 
-  token = jwt.decode(res.header('token'));
+  token = jwt.decode(req.header('token'));
   userid = token._id;
+  user = await User.findById(userid);
 
-  user = await findById(userid);
-
-  isAPlayer = true;
-  
-  player = await Player.findOne({user: userid}).catch((err) => {
-    isAPlayer = false;
-  });
-
-  if(isAPlayer){
+  player = await getPlayer(user);
+  if(player){
     sheets = await CharacterSheet.find({belongsTo: {$in: [player._id]}});
 
     res.status(200).send(sheets);
@@ -106,21 +124,18 @@ router.get('/sheets', passport.authenticate('jwt', {session: false}), async func
 
 router.get('/sheets/:id', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
 
-  token = jwt.decode(res.header('token'));
+  token = jwt.decode(req.header('token'));
   userid = token._id;
   characterSheetID = req.params.id;
 
-  user = await findById(userid);
+  user = req.user;
+  player = await getPlayer(user);
+  character = await CharacterSheet.findById(characterSheetID);
 
-  isAPlayer = true;
-  
-  player = await Player.findOne({user: userid}).catch((err) => {
-    isAPlayer = false;
-  });
 
   //If its a player check if they have permission to watch this
-  if(isAPlayer){
-    if(!character.belongsTo.contains(player._id)){
+  if(player){
+    if(!character.belongsTo.includes(player._id)){
       res.status(400).send("You do not have permission to see this");
     }
   };
@@ -128,6 +143,39 @@ router.get('/sheets/:id', passport.authenticate('jwt', {session: false}), async 
   sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
     res.status(400).send("The character sheet requested does not exist");
   });
+
+  res.status(200).send(sheet);
+})
+
+router.delete('/sheets/:id', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
+  token = jwt.decode(req.header('token'));
+  userid = token._id;
+  characterSheetID = req.params.id;
+
+  user = req.user;
+  player = await getPlayer(user);
+  character = await CharacterSheet.findById(characterSheetID);
+
+  //If its a player check if they have permission to watch this
+  if(player){
+    if(!character.belongsTo.includes(player._id)){
+      res.status(400).send("You do not have permission to see this");
+    }
+  };
+
+  sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
+    res.status(400).send("The character sheet requested does not exist");
+  });
+
+  let route = './public/characterSheetImages' + "/" + sheet._id.toString();
+  deleteFolderRecursive(route);
+
+  dwCharacterSheet = DWCharacterSheet.find({characterSheet : character._id});
+
+  await DWCharacterSheet.deleteOne({characterSheet : character._id});
+  await CharacterSheet.findByIdAndDelete(characterSheetID);
+  res.status(200).send("Deleted.");
+
 })
 
 
@@ -135,5 +183,27 @@ async function assignPlayerToSheet(player, characterSheet){
   characterSheet.belongsTo.push(player._id);
   await characterSheet.save();
 }
+
+async function getPlayer(user){
+  let player = await Player.findOne({user: user._id}).catch((err) => {
+    player = null
+  });
+
+  return player;
+}
+
+function deleteFolderRecursive(path) {
+  if (fs.existsSync(path)) {
+    fs.readdirSync(path).forEach(function(file, index){
+      var curPath = path + "/" + file;
+      if (fs.lstatSync(curPath).isDirectory()) { // recurse
+        deleteFolderRecursive(curPath);
+      } else { // delete file
+        fs.unlinkSync(curPath);
+      }
+    });
+    fs.rmdirSync(path);
+  }
+};
 
 module.exports = router;

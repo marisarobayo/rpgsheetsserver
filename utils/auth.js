@@ -39,7 +39,7 @@ passport.use(new JWTStrategy({
     jwtFromRequest: ExtractJWT.fromHeader('token'),
     secretOrKey   : jwtSecret
     },function (jwtPayload, done) {
-        User.findOneById(jwtPayload._id).then(function (err, user) {
+        User.findById(jwtPayload._id, function(err, user){
             if(err){
                 return done(err);
             }

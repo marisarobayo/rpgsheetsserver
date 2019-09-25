@@ -1,3 +1,5 @@
 /setenvironmentvariable.bat
 /node_modules
 /public/characterSheetImages
+/rpgsheets.key
+/rpgsheets.crt

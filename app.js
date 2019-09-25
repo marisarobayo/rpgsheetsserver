@@ -8,6 +8,7 @@ var https = require('https');
 var auth = require('./utils/auth.js')
 var passport = require('passport');
 const expressFileUpload = require('express-fileupload');
+var fs = require('fs');
 
 var mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
@@ -17,7 +18,7 @@ const errorHandler = require('errorhandler');
 var app = express();
 
 var port = process.env.PORT || 3000;
-const isProduction = false;
+const IS_PRODUCTION = true;
 var corsOptions = {
   origin: '*',
   optionsSuccessStatus:200
@@ -37,11 +38,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(passport.initialize());
 app.use(expressFileUpload());
 
-if(!isProduction) {
-  app.use(errorHandler());
-  app.use(cors());
-}
-
 exports.app = app;
 exports.mongoose = mongoose;
 
@@ -51,4 +47,17 @@ var sheetsRouter = require('./routes/sheets');
 app.use('/', indexRouter);
 app.use('/', sheetsRouter);
 
-app.listen(port, () => console.log(`Example app listening on port ${port}!`))
+if(!IS_PRODUCTION) {
+  app.use(errorHandler());
+  app.use(cors());
+  app.listen(port, () => console.log(`Example app listening on port ${port}!`))
+} else {
+  app.use(cors());
+  https.createServer({
+    key: fs.readFileSync('rpgsheets.key'),
+    cert: fs.readFileSync('rpgsheets.crt')
+  }, app).listen(port, function (){
+    console.log(`Server ready on port ${port} `);
+  })
+}
+

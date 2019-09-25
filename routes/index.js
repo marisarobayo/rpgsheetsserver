@@ -168,9 +168,20 @@ router.post('/login', function (req, res, next) {
   })(req,res,next);
 });
 
-// Check if user is log in, mostly debug purposes
-router.get('/login', passport.authenticate('jwt', {session: false}), function (req, res, next) {
-  res.send(req.user.username);
+app.delete('/logout', function(req, res){
+  req.logout();
+  res.status(200).send();
+});
+
+// Get user profile
+router.get('/profile', passport.authenticate('jwt', {session: false}), function (req, res, next) {
+  let user = req.user;
+  let response = {
+    username: user.username,
+    displayName: user.displayName,
+    email: user.email
+  }
+  res.send(response);
 });
 
 router.post('/resetPassword', async function(req,res,next){
