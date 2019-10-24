@@ -11,7 +11,7 @@ var dwEquipmentSchema = new Schema({
     name: String,
     description: String,
     weight: Number,
-    tags: [String],
+    tags: String,
     amount: Number,
 })
 
@@ -33,6 +33,7 @@ var dungeonWorldSchema = new Schema({
     alignment: String,
     moves: [dwAbilitySchema],
     equipment: [dwEquipmentSchema],
+    armor: Number,
     bonds: [String]
 })
 

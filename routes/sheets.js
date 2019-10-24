@@ -89,7 +89,7 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
     })
 
     // Setting up the link
-    let link = "http://localhost:3000/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
+    let link = "https://localhost:3000/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
     characterSheet.displayImage = link;
     characterSheet.save();
   }
@@ -114,7 +114,8 @@ router.get('/sheets', passport.authenticate('jwt', {session: false}), async func
   player = await getPlayer(user);
   if(player){
     sheets = await CharacterSheet.find({belongsTo: {$in: [player._id]}});
-
+    console.log(sheets);
+    console.log(user);
     res.status(200).send(sheets);
   } else {
     sheets = await CharacterSheet.find();
@@ -123,26 +124,36 @@ router.get('/sheets', passport.authenticate('jwt', {session: false}), async func
 })
 
 router.get('/sheets/:id', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
-
   token = jwt.decode(req.header('token'));
   userid = token._id;
   characterSheetID = req.params.id;
 
   user = req.user;
   player = await getPlayer(user);
-  character = await CharacterSheet.findById(characterSheetID);
+  sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
+    res.status(400).send("The character sheet requested does not exist");
+  });
 
 
   //If its a player check if they have permission to watch this
   if(player){
-    if(!character.belongsTo.includes(player._id)){
+    if(!sheet.belongsTo.includes(player._id)){
       res.status(400).send("You do not have permission to see this");
     }
   };
 
-  sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
-    res.status(400).send("The character sheet requested does not exist");
-  });
+  
+
+   //TODO bad design, must refactor
+  let game = await getGame(sheet);
+  if(game == "dw"){
+    /*let dwCharacterSheet = await DWCharacterSheet.findOne({characterSheet : character._id});
+    sheet.detail = dwCharacterSheet;
+    console.log(sheet);
+    console.log(dwCharacterSheet);*/
+
+    sheet = await DWCharacterSheet.findOne({characterSheet : sheet._id}).populate('characterSheet').exec();
+  }
 
   res.status(200).send(sheet);
 })
@@ -154,28 +165,128 @@ router.delete('/sheets/:id', passport.authenticate('jwt', {session: false}), asy
 
   user = req.user;
   player = await getPlayer(user);
-  character = await CharacterSheet.findById(characterSheetID);
-
-  //If its a player check if they have permission to watch this
-  if(player){
-    if(!character.belongsTo.includes(player._id)){
-      res.status(400).send("You do not have permission to see this");
-    }
-  };
 
   sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
     res.status(400).send("The character sheet requested does not exist");
   });
 
+  //If its a player check if they have permission to watch this
+  if(player){
+    if(!sheet.belongsTo.includes(player._id)){
+      res.status(400).send("You do not have permission to see this");
+    }
+  };
+
+  
+
   let route = './public/characterSheetImages' + "/" + sheet._id.toString();
   deleteFolderRecursive(route);
 
-  dwCharacterSheet = DWCharacterSheet.find({characterSheet : character._id});
-
-  await DWCharacterSheet.deleteOne({characterSheet : character._id});
-  await CharacterSheet.findByIdAndDelete(characterSheetID);
+  //TODO bad design, must refactor
+  if(await getGame(sheet) == "dw"){
+    dwCharacterSheet = DWCharacterSheet.find({characterSheet : character._id});
+    await DWCharacterSheet.deleteOne({characterSheet : character._id});
+    await CharacterSheet.findByIdAndDelete(characterSheetID);
+  }
   res.status(200).send("Deleted.");
 
+})
+
+router.put('/sheets/:id', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
+  token = jwt.decode(req.header('token'));
+  userid = token._id;
+  characterSheetID = req.params.id;
+  sheet = req.body.sheet;
+  user = req.user;
+
+  player = await getPlayer(user);
+
+  oldSheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
+    res.status(400).send("The character sheet does not exist");
+    return;
+  });
+
+  //If its a player check if they have permission to watch this
+  if(player){
+    if(!oldSheet.belongsTo.includes(player._id)){
+      res.status(400).send("You do not have permission to update this");
+    }
+  };
+
+  // First we update the character sheet itself
+
+  oldSheet.name = sheet.name;
+  oldSheet.belongsTo = sheet.belongsTo;
+
+   //TODO bad design, must refactor
+  let game = await getGame(sheet);
+  if(game == "dw"){
+    let dwCharacterSheet = await DWCharacterSheet.findOne({characterSheet : oldSheet._id});
+    dwCharacterSheet.strength = sheet.str;
+    dwCharacterSheet.constitution = sheet.con;
+    dwCharacterSheet.dexterity = sheet.hp;
+    dwCharacterSheet.intelligence = sheet.int;
+    dwCharacterSheet.wisdom = sheet.wis;
+    dwCharacterSheet.charisma = sheet.cha;
+    dwCharacterSheet.maxhp = sheet.hp;
+    dwCharacterSheet.damage = sheet.damage;
+    dwCharacterSheet.class = sheet.class;
+    dwCharacterSheet.level = sheet.level;
+    dwCharacterSheet.xp = sheet.xp;
+    dwCharacterSheet.race = sheet.race;
+    dwCharacterSheet.raceMove = sheet.raceMove;
+    dwCharacterSheet.alignment = sheet.alignment;
+    dwCharacterSheet.moves = sheet.moves;
+    dwCharacterSheet.equipment = sheet.equipment;
+    dwCharacterSheet.armor = sheet.armor;
+    dwCharacterSheet.bonds = sheet.bonds;
+
+    dwCharacterSheet.save();
+  }
+
+  //oldSheet.save();
+  res.status(200).send(sheet);
+})
+
+router.put('/sheets/:id/invite', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
+  token = jwt.decode(req.header('token'));
+  userid = token._id;
+  characterSheetID = req.params.id;
+  users = req.body.players;
+  user = req.user;
+
+  player = await getPlayer(user);
+
+  sheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
+    res.status(400).send("The character sheet does not exist");
+    return;
+  });
+
+  //If its a player check if they have permission to watch this
+  if(player){
+    if(!sheet.belongsTo.includes(player._id)){
+      res.status(400).send("You do not have permission to update this");
+    }
+  };
+
+
+  for(let i = 0; i < users.length; i++){
+    player = await Player.findOne({user: users[i].id});
+    console.log(player);
+    if(!sheet.belongsTo.includes(player._id)){
+      sheet.belongsTo.push(player.id);
+    }
+  }
+  /*await users.forEach(async function(user) {
+    player = await Player.findOne({user: user.id});
+    console.log(player);
+    if(!sheet.belongsTo.includes(player._id)){
+      sheet.belongsTo.push(player.id);
+    }
+  })*/
+  console.log(sheet);
+  sheet.save();
+  res.status(200).send(sheet);
 })
 
 
@@ -190,6 +301,14 @@ async function getPlayer(user){
   });
 
   return player;
+}
+
+async function getGame(sheet){
+  let dwCharacterSheet = await DWCharacterSheet.find({characterSheet : sheet._id});
+  if (dwCharacterSheet != null){
+    return "dw";
+  }
+  return "";
 }
 
 function deleteFolderRecursive(path) {

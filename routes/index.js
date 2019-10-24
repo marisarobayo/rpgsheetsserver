@@ -248,7 +248,7 @@ router.post('/resetPassword/:passwordResetToken', async function(req,res,next){
   res.status(201).send("Password changed");
 })
 
-
+// Checks if username is taken
 router.get('/username/:username', async function(req,res,next) {
   username = req.params.username;
 
@@ -261,12 +261,31 @@ router.get('/username/:username', async function(req,res,next) {
   }
 })
 
+// Gets info of an user given username or password
+router.get('/profile/:data', async function(req,res,next) {
+  data = req.params.data;
+
+  user = await User.findOne({username: data});
+
+  if(user){
+    res.status(200).send({id: user.id, name: user.displayName});
+  } else {
+    user = await User.findOne({email: data});
+    if(user){
+      res.status(200).send({id: user.id, name: user.displayName});
+    } else {
+      res.status(404);
+    }
+  }
+})
+
+
 async function sendVerificationEmail (to, token, userID){
   const msg = {
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Activate your RPGSheets Account',
-    text: 'this is the link: http://localhost:3000/verify?' + token,
+    text: 'this is the link: http://localhost:3000/#/verify?' + token,
     html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)
@@ -277,8 +296,8 @@ async function sendResetPasswordEmail (to, token, userID){
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Reset your RPGSheets Password',
-    text: 'this is the link: http://localhost:3000/resetPassword?' + token,
-    html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
+    text: 'this is the link: http://localhost:3000/#/resetPassword?' + token,
+    html: 'this is the link: <a href=\"http://localhost:3000/#/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)
 }
