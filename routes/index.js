@@ -285,7 +285,7 @@ async function sendVerificationEmail (to, token, userID){
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Activate your RPGSheets Account',
-    text: 'this is the link: http://localhost:3000/#/verify?' + token,
+    text: 'this is the link: http://localhost:3000/verify?' + token,
     html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)
@@ -296,8 +296,8 @@ async function sendResetPasswordEmail (to, token, userID){
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Reset your RPGSheets Password',
-    text: 'this is the link: http://localhost:3000/#/resetPassword?' + token,
-    html: 'this is the link: <a href=\"http://localhost:3000/#/verify/' + token + '/' + userID + '\"> here </a>'
+    text: 'this is the link: http://localhost:3000/resetPassword?' + token,
+    html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)
 }
