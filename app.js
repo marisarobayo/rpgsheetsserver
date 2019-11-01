@@ -9,16 +9,16 @@ var auth = require('./utils/auth.js')
 var passport = require('passport');
 const expressFileUpload = require('express-fileupload');
 var fs = require('fs');
-
 var mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
 
+const IS_PRODUCTION = true;
+
+var prodUri = process.env.MONGODB_URI;
 const errorHandler = require('errorhandler');
 
 var app = express();
 
 var port = process.env.PORT || 3000;
-const IS_PRODUCTION = true;
 var corsOptions = {
   origin: '*',
   optionsSuccessStatus:200
@@ -39,7 +39,9 @@ app.use(expressFileUpload());
 
 if(IS_PRODUCTION){
   app.use(cors());
+  mongoose.connect(prodUri, {useNewUrlParser: true});
 } else {
+  mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
   app.use(cors());
   app.use(errorHandler());
 }
