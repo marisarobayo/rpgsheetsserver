@@ -58,11 +58,15 @@ app.use('/', sheetsRouter);
 if(!IS_PRODUCTION) {
   app.listen(port, () => console.log(`Example app listening on port ${port}!`))
 } else {
-  https.createServer({
+  //Not needed in heroku
+  
+  /*https.createServer({
     key: fs.readFileSync('rpgsheets.key'),
     cert: fs.readFileSync('rpgsheets.crt')
   }, app).listen(port, function (){
     console.log(`Server ready on port ${port} `);
-  })
+  })*/
+
+  app.listen(port);
 }
 
