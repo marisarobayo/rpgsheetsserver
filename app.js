@@ -39,6 +39,7 @@ app.use(expressFileUpload());
 
 if(IS_PRODUCTION){
   app.use(cors());
+  console.log(prodUri);
   mongoose.connect(prodUri, {useNewUrlParser: true}).catch(error => console.log(error));
 } else {
   mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
