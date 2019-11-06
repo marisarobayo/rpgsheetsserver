@@ -252,7 +252,7 @@ router.post('/resetPassword/:passwordResetToken', async function(req,res,next){
 router.get('/username/:username', async function(req,res,next) {
   username = req.params.username;
 
-  user = await User.findOne({username: username});
+  user = await User.findOne({username: username}).catch((error) => console.log(error));
 
   if(user){
     res.status(200).send(true);

@@ -39,7 +39,7 @@ app.use(expressFileUpload());
 
 if(IS_PRODUCTION){
   app.use(cors());
-  mongoose.connect(prodUri, {useNewUrlParser: true});
+  mongoose.connect(prodUri, {useNewUrlParser: true}).catch(error => console.log(error));
 } else {
   mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
   app.use(cors());
@@ -56,17 +56,14 @@ app.use('/', indexRouter);
 app.use('/', sheetsRouter);
 
 if(!IS_PRODUCTION) {
-  app.listen(port, () => console.log(`Example app listening on port ${port}!`))
-} else {
-  //Not needed in heroku
-  
-  /*https.createServer({
+  https.createServer({
     key: fs.readFileSync('rpgsheets.key'),
     cert: fs.readFileSync('rpgsheets.crt')
   }, app).listen(port, function (){
     console.log(`Server ready on port ${port} `);
-  })*/
-
+  })
+} else {
+  //In heroku they supply their own certificate
   app.listen(port);
 }
 
