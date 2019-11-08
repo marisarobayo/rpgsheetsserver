@@ -227,13 +227,19 @@ router.put('/sheets/:id', passport.authenticate('jwt', {session: false}), async 
   let game = await getGame(sheet);
   if(game == "dw"){
     let dwCharacterSheet = await DWCharacterSheet.findOne({characterSheet : oldSheet._id});
-    dwCharacterSheet.strength = sheet.str;
-    dwCharacterSheet.constitution = sheet.con;
-    dwCharacterSheet.dexterity = sheet.hp;
-    dwCharacterSheet.intelligence = sheet.int;
-    dwCharacterSheet.wisdom = sheet.wis;
-    dwCharacterSheet.charisma = sheet.cha;
-    dwCharacterSheet.maxhp = sheet.hp;
+    dwCharacterSheet.strength = sheet.strength;
+    dwCharacterSheet.constitution = sheet.constitution;
+    dwCharacterSheet.dexterity = sheet.dexterity;
+    dwCharacterSheet.intelligence = sheet.intelligence;
+    dwCharacterSheet.wisdom = sheet.wisdom;
+    dwCharacterSheet.charisma = sheet.charisma;
+    dwCharacterSheet.strWeak = sheet.strWeak;
+    dwCharacterSheet.dexWeak = sheet.dexWeak;
+    dwCharacterSheet.conWeak = sheet.conWeak;
+    dwCharacterSheet.intWeak = sheet.intWeak;
+    dwCharacterSheet.wisWeak = sheet.wisWeak;
+    dwCharacterSheet.chaWeak = sheet.chaWeak;
+    dwCharacterSheet.maxhp = sheet.maxhp;
     dwCharacterSheet.damage = sheet.damage;
     dwCharacterSheet.class = sheet.class;
     dwCharacterSheet.level = sheet.level;
