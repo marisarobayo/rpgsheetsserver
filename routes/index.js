@@ -24,7 +24,7 @@ var characterSheet = sheets.CharacterSheet;
 router.post('/register', async function(req, res, next) {
   username = req.body.username;
   email = req.body.email;
-  displayName = req.body.email;
+  displayName = req.body.displayName;
   password = req.body.password;
   characterSheet = req.body.characterSheet;
 

@@ -89,10 +89,11 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
     })
 
     // Setting up the link
+    let link = "";
     if(process.env.IS_PRODUCTION){
-      let link = "https://rpgsheetsserver.herokuapp.com/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
+      link = "https://rpgsheetsserver.herokuapp.com/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
     } else {
-      let link = "https://localhost:3000/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
+      link = "https://localhost:3000/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
     }
     characterSheet.displayImage = link;
     characterSheet.save();
