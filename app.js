@@ -11,7 +11,7 @@ const expressFileUpload = require('express-fileupload');
 var fs = require('fs');
 var mongoose = require('mongoose');
 
-const IS_PRODUCTION = true;
+const IS_PRODUCTION = false;
 
 var prodUri = process.env.MONGODB_URI;
 const errorHandler = require('errorhandler');

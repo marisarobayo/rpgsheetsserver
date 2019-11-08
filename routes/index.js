@@ -285,8 +285,8 @@ async function sendVerificationEmail (to, token, userID){
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Activate your RPGSheets Account',
-    text: 'this is the link: http://localhost:3000/verify?' + token,
-    html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
+    text: 'In order to use our service, please click on the following link to active your account: https://rpgsheetsserver.herokuapp.com/verify?' + token,
+    html: 'In order to use our service, please click on the following link to active your account: <a href=\"https://rpgsheetsserver.herokuapp.com/verify/' + token + '/' + userID + '\"> Activate </a>'
   }
   await sgMail.send(msg)
 }
@@ -296,8 +296,8 @@ async function sendResetPasswordEmail (to, token, userID){
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Reset your RPGSheets Password',
-    text: 'this is the link: http://localhost:3000/resetPassword?' + token,
-    html: 'this is the link: <a href=\"http://localhost:3000/verify/' + token + '/' + userID + '\"> here </a>'
+    text: 'this is the link: https://rpgsheetsserver.herokuapp.com/resetPassword?' + token,
+    html: 'this is the link: <a href=\"https://rpgsheetsserver.herokuapp.com/verify/' + token + '/' + userID + '\"> here </a>'
   }
   await sgMail.send(msg)
 }
