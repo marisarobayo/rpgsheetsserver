@@ -11,7 +11,10 @@ const expressFileUpload = require('express-fileupload');
 var fs = require('fs');
 var mongoose = require('mongoose');
 
-const IS_PRODUCTION = true;
+var IS_PRODUCTION = process.env.IS_PRODUCTION || false;
+if (IS_PRODUCTION == "false"){
+  IS_PRODUCTION = false;
+}
 
 var prodUri = process.env.MONGODB_URI;
 const errorHandler = require('errorhandler');
@@ -39,7 +42,6 @@ app.use(expressFileUpload());
 
 if(IS_PRODUCTION){
   app.use(cors());
-  console.log(prodUri);
   mongoose.connect(prodUri, {useNewUrlParser: true}).catch(error => console.log(error));
 } else {
   mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});

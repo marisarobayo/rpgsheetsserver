@@ -285,8 +285,8 @@ async function sendVerificationEmail (to, token, userID){
     to: email,
     from: 'rpgSheets@gmail.com',
     subject: 'Activate your RPGSheets Account',
-    text: 'In order to use our service, please click on the following link to active your account: https://rpgsheetsserver.herokuapp.com/verify?' + token,
-    html: 'In order to use our service, please click on the following link to active your account: <a href=\"https://rpgsheetsserver.herokuapp.com/verify/' + token + '/' + userID + '\"> Activate </a>'
+    text: 'In order to use our service, please click on the following link to active your account: https://rpgsheets.herokuapp.com/verify?' + token,
+    html: 'In order to use our service, please click on the following link to active your account: <a href=\"https://rpgsheets.herokuapp.com/verify/' + token + '/' + userID + '\"> Activate </a>'
   }
   await sgMail.send(msg)
 }
