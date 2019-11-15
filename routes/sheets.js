@@ -88,7 +88,7 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
       return;
     })
 
-    cloudinary.uploader.upload("./public/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name, function(err, image) {
+    await cloudinary.uploader.upload("./public/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name, function(err, image) {
       if(err){
         console.log(err);
       } else {
