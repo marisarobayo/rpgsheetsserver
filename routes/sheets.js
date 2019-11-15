@@ -14,7 +14,7 @@ var User = users.User;
 var Player = users.Player;
 var GM = users.GM;
 var mongoose = js.mongoose;
-
+var cloudinary = require('cloudinary').v2;
 
 router.post('/sheets', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
   name = req.body.name;
@@ -47,7 +47,6 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
 
   // If not a GM, add themselves to the character sheet
   player = await getPlayer(req.user);
-  console.log(player);
   if(player){
     characterSheet.belongsTo.push(player._id);
   }
@@ -63,6 +62,7 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
   await characterSheet.save();
   
   // We have to add the picture afterwards since we need the id
+  // We also need to move it first to a local filesystem before uploading
   if(image){
     // Base image folder
     try {
@@ -88,15 +88,15 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
       return;
     })
 
-    // Setting up the link
-    let link = "";
-    if(process.env.IS_PRODUCTION){
-      link = "https://rpgsheetsserver.herokuapp.com/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
-    } else {
-      link = "https://localhost:3000/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name;
-    }
-    characterSheet.displayImage = link;
-    characterSheet.save();
+    cloudinary.uploader.upload("./public/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name, function(err, image) {
+      if(err){
+        console.log(err);
+      } else {
+        characterSheet.displayImage = image.url;
+        characterSheet.displayImageID = image.public_id;
+        characterSheet.save();
+      }
+    });
   }
 
   //TODO bad design, must refactor
@@ -119,8 +119,6 @@ router.get('/sheets', passport.authenticate('jwt', {session: false}), async func
   player = await getPlayer(user);
   if(player){
     sheets = await CharacterSheet.find({belongsTo: {$in: [player._id]}});
-    console.log(sheets);
-    console.log(user);
     res.status(200).send(sheets);
   } else {
     sheets = await CharacterSheet.find();
@@ -182,15 +180,15 @@ router.delete('/sheets/:id', passport.authenticate('jwt', {session: false}), asy
     }
   };
 
-  
-
   let route = './public/characterSheetImages' + "/" + sheet._id.toString();
   deleteFolderRecursive(route);
 
+  cloudinary.uploader.destroy(sheet.displayImageID);
+
   //TODO bad design, must refactor
   if(await getGame(sheet) == "dw"){
-    dwCharacterSheet = DWCharacterSheet.find({characterSheet : character._id});
-    await DWCharacterSheet.deleteOne({characterSheet : character._id});
+    dwCharacterSheet = DWCharacterSheet.find({characterSheet : sheet._id});
+    await DWCharacterSheet.deleteOne({characterSheet : sheet._id});
     await CharacterSheet.findByIdAndDelete(characterSheetID);
   }
   res.status(200).send("Deleted.");

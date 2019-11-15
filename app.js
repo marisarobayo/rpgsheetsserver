@@ -9,7 +9,9 @@ var auth = require('./utils/auth.js')
 var passport = require('passport');
 const expressFileUpload = require('express-fileupload');
 var fs = require('fs');
+var cloudinary = require('cloudinary').v2;
 var mongoose = require('mongoose');
+
 
 var IS_PRODUCTION = process.env.IS_PRODUCTION || false;
 if (IS_PRODUCTION == "false"){
