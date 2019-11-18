@@ -11,7 +11,7 @@ const expressFileUpload = require('express-fileupload');
 var fs = require('fs');
 var cloudinary = require('cloudinary').v2;
 var mongoose = require('mongoose');
-
+const forceSecure = require("force-secure-express");
 
 var IS_PRODUCTION = process.env.IS_PRODUCTION || false;
 if (IS_PRODUCTION == "false"){
@@ -44,6 +44,9 @@ app.use(expressFileUpload());
 
 if(IS_PRODUCTION){
   app.use(cors());
+  app.use(forceSecure([
+    "rpgsheetsserver.herokuapp.com"
+  ]));
   mongoose.connect(prodUri, {useNewUrlParser: true}).catch(error => console.log(error));
 } else {
   mongoose.connect('mongodb://localhost/rpgsheets', {useNewUrlParser: true});
