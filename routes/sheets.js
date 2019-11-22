@@ -15,6 +15,8 @@ var Player = users.Player;
 var GM = users.GM;
 var mongoose = js.mongoose;
 var cloudinary = require('cloudinary').v2;
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 router.post('/sheets', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
   name = req.body.name;
@@ -278,22 +280,14 @@ router.put('/sheets/:id/invite', passport.authenticate('jwt', {session: false}),
     }
   };
 
-
   for(let i = 0; i < users.length; i++){
     player = await Player.findOne({user: users[i].id});
-    console.log(player);
     if(!sheet.belongsTo.includes(player._id)){
       sheet.belongsTo.push(player.id);
+      sendInviteEmail(users[i].email, sheet.id);
     }
   }
-  /*await users.forEach(async function(user) {
-    player = await Player.findOne({user: user.id});
-    console.log(player);
-    if(!sheet.belongsTo.includes(player._id)){
-      sheet.belongsTo.push(player.id);
-    }
-  })*/
-  console.log(sheet);
+  
   sheet.save();
   res.status(200).send(sheet);
 })
@@ -333,5 +327,17 @@ function deleteFolderRecursive(path) {
     fs.rmdirSync(path);
   }
 };
+
+
+async function sendInviteEmail (to, sheetID){
+  const msg = {
+    to: email,
+    from: 'rpgSheets@gmail.com',
+    subject: 'RPGSheets: A character sheet has been shared with you',
+    text: 'You can check it out here: https://rpgsheets.herokuapp.com/main/' + sheetID + "/main",
+    html: 'You can check it out here: <a href=\"https://rpgsheets.herokuapp.com/main/' + sheetID + "/main\">"
+  }
+  await sgMail.send(msg)
+}
 
 module.exports = router;
