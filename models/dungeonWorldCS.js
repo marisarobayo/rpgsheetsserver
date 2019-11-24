@@ -12,7 +12,12 @@ var dwEquipmentSchema = new Schema({
     description: String,
     weight: Number,
     tags: String,
-    amount: Number,
+    amount: Number
+})
+
+var dwBondSchema = new Schema({
+    id: Number,
+    text: String
 })
 
 var dungeonWorldSchema = new Schema({
@@ -40,7 +45,7 @@ var dungeonWorldSchema = new Schema({
     moves: [dwAbilitySchema],
     equipment: [dwEquipmentSchema],
     armor: Number,
-    bonds: [String]
+    bonds: [dwBondSchema]
 })
 
 var DWCharacterSheet = mongoose.model('DWCharacterSheet', dungeonWorldSchema);
