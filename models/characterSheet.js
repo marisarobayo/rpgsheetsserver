@@ -6,6 +6,7 @@ var characterSheetSchema = new Schema({
     name: String,
     displayImage: String,
     displayImageID: String,
+    displayImageFile: String,
     belongsTo: [{type: Schema.Types.ObjectId, ref: Player}]
 });
 

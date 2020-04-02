@@ -4,6 +4,7 @@ var passport = require('passport');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path')
+var sanitize = require('sanitize-filename');
 
 var js = require('../app.js');
 var users = require('../models/user.js');
@@ -21,7 +22,6 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 router.post('/sheets', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
   name = req.body.name;
   players = req.body.players; //TODO deprecated
-  image = req.files.image;
   game = req.body.game;
 
   if(!name){
@@ -52,55 +52,9 @@ router.post('/sheets', passport.authenticate('jwt', {session: false}), async fun
   if(player){
     characterSheet.belongsTo.push(player._id);
   }
-  
-  // Checking the image format first
-  if(image){
-    if(image.mimetype != "image/jpeg" && image.mimetype != "image/png" && image.mimetype != "image/gif"){
-      res.status(400).send("Image format not correct");
-      return;
-    }
-  }
 
   await characterSheet.save();
   
-  // We have to add the picture afterwards since we need the id
-  // We also need to move it first to a local filesystem before uploading
-  if(image){
-    // Base image folder
-    try {
-      fs.mkdirSync('./public/characterSheetImages');
-    } catch(err) {
-      //res.status(500).send("There was an error uploading your image");
-      //If it already exists thats fine
-      //return;
-    };
-
-    // Folder for this character sheet
-    try {
-      fs.mkdirSync('./public/characterSheetImages' + "/" + characterSheet._id.toString())
-    } catch(err) {
-      //res.status(500).send("There was an error uploading your image");
-      //If it already exists thats fine
-      //return;
-    };
-    let route = './public/characterSheetImages' + "/" + characterSheet._id.toString()+ "/" + image.name;
-    await image.mv(route).catch((err) => {
-      console.log("could not");
-      res.status(500).send("There was an error uploading your image");
-      return;
-    })
-
-    await cloudinary.uploader.upload("./public/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + image.name, function(err, image) {
-      if(err){
-        console.log(err);
-      } else {
-        characterSheet.displayImage = image.url;
-        characterSheet.displayImageID = image.public_id;
-        characterSheet.save();
-      }
-    });
-  }
-
   //TODO bad design, must refactor
   if(game == "dw"){
     cs = new DWCharacterSheet();
@@ -197,6 +151,43 @@ router.delete('/sheets/:id', passport.authenticate('jwt', {session: false}), asy
 
 })
 
+router.put('/sheets/:id/image', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
+  token = jwt.decode(req.header('token'));
+  userid = token._id;
+  characterSheetID = req.params.id;
+  user = req.user;
+  image = req.files.image;
+
+  player = await getPlayer(user);
+
+
+  oldSheet = await CharacterSheet.findById(characterSheetID).catch((err) => {
+    res.status(400).send("The character sheet does not exist");
+    return;
+  });
+
+  //If its a player check if they have permission to watch this
+  if(player){
+    if(!oldSheet.belongsTo.includes(player._id)){
+      res.status(400).send("You do not have permission to update this");
+    }
+  };
+
+  //now we update the image if it exists
+  try {
+    if(image){
+      await createOrUpdateCharacterSheetPicture(oldSheet,image); //This changes the oldSheet object with the new iamge
+      await oldSheet.save();
+      res.status(200).send(oldSheet);
+    } else {
+      res.status(500).send("No image");
+    }
+  } catch (err) {
+    res.status(500).send("There was an error uploading your image");
+  }
+
+})
+
 router.put('/sheets/:id', passport.authenticate('jwt', {session: false}), async function (req, res, next) {
   token = jwt.decode(req.header('token'));
   userid = token._id;
@@ -222,10 +213,12 @@ router.put('/sheets/:id', passport.authenticate('jwt', {session: false}), async 
 
   oldSheet.name = sheet.name;
   oldSheet.belongsTo = sheet.belongsTo;
+  await oldSheet.save();
 
    //TODO bad design, must refactor
   let game = await getGame(sheet);
   if(game == "dw"){
+    //updating each parameter separately
     let dwCharacterSheet = await DWCharacterSheet.findOne({characterSheet : oldSheet._id});
     dwCharacterSheet.strength = sheet.strength;
     dwCharacterSheet.constitution = sheet.constitution;
@@ -255,7 +248,6 @@ router.put('/sheets/:id', passport.authenticate('jwt', {session: false}), async 
     dwCharacterSheet.save();
   }
 
-  //oldSheet.save();
   res.status(200).send(sheet);
 })
 
@@ -292,12 +284,6 @@ router.put('/sheets/:id/invite', passport.authenticate('jwt', {session: false}),
   res.status(200).send(sheet);
 })
 
-
-async function assignPlayerToSheet(player, characterSheet){
-  characterSheet.belongsTo.push(player._id);
-  await characterSheet.save();
-}
-
 async function getPlayer(user){
   let player = await Player.findOne({user: user._id}).catch((err) => {
     player = null
@@ -314,11 +300,66 @@ async function getGame(sheet){
   return "";
 }
 
+async function createOrUpdateCharacterSheetPicture(characterSheet, image){
+
+  // Checking the image format first
+  if(image){
+    if(image.mimetype != "image/jpeg" && image.mimetype != "image/png" && image.mimetype != "image/gif"){
+      throw "Image format not correct";
+    }
+  }
+
+  // First of all we need to move the image to a local filesystem
+
+  // Base image folder, checking if it does exist, if it does not, create!
+
+  await fs.stat('./public/characterSheetImages', function(err, stat) {
+    if(err && err.code === "ENOENT"){
+      fs.mkdirSync('./public/characterSheetImages');
+    }
+  })
+
+
+  // Folder for this character sheet, same
+  await fs.stat('./public/characterSheetImages' + "/" + characterSheet._id.toString(), function(err, stat) {
+    if(err && err.code === "ENOENT"){
+      fs.mkdirSync('./public/characterSheetImages' + "/" + characterSheet._id.toString());
+    }
+  })
+
+  let name = sanitize(image.name);
+
+  let route = './public/characterSheetImages' + "/" + characterSheet._id.toString()+ "/" + name;
+  await image.mv(route).catch((err) => {
+    throw err;
+  })
+
+  //Check if this character sheet already had a picture, if yes, we have to delete it both from the filesystem and cloudinary
+  if(characterSheet.displayImageFile){
+    fs.unlinkSync('./public/characterSheetImages' + "/" + characterSheet._id.toString()+ "/" + characterSheet.displayImageFile) 
+    await cloudinary.uploader.destroy(characterSheet.displayImageID, function(err, result){
+      if(err){
+        throw err;
+      }
+    })
+  }
+
+  await cloudinary.uploader.upload("./public/characterSheetImages" + "/" + characterSheet._id.toString()+ "/" + name, async function(err, image) {
+    if(err){
+      throw err;
+    } else {
+      characterSheet.displayImage = image.url;
+      characterSheet.displayImageID = image.public_id;
+      characterSheet.displayImageFile = name;
+    }
+  });
+}
+
 function deleteFolderRecursive(path) {
   if (fs.existsSync(path)) {
     fs.readdirSync(path).forEach(function(file, index){
       var curPath = path + "/" + file;
-      if (fs.lstatSync(curPath).isDirectory()) { // recurse
+      if (fs.lstatSync(curPath).isDirectory()) { 
         deleteFolderRecursive(curPath);
       } else { // delete file
         fs.unlinkSync(curPath);
